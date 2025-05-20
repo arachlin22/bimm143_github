@@ -1,0 +1,174 @@
+---
+title: "class 06"
+author: "abe A16735986"
+format: pdf
+toc: true
+---
+
+## 1. Function Basics
+Let's start writing our first silly function to add some numbers.
+
+Every R function has 3 things: 
+
+-name
+-input arguments (there can be loads of these separated by a comma)
+-the body (the R code that does the work)
+```{r}
+add <- function(x, y=10, z=0){
+  x + y + z
+}
+```
+
+I can just use this function like any other function as long as E knows about it (i.e. run the code chunk)
+
+```{r}
+add (1, 100)
+```
+
+```{r}
+add( x=c(1,2,3,4), y=100)
+```
+
+```{r}
+add(1)
+```
+
+Functions can have "required" input arguments and "optional" input arguments. The optional arguments are defined with an equals default value (`y=10`) in the function definition.
+
+```{r}
+add(x=1, y=100, z=10)
+```
+
+>Q. Write a function to return a DNA sequence of a user specified length? Call it `generate_dna()`
+
+The `sample()` function can help here
+```{r}
+#generate_dna <- function(size=5){}
+
+students <- c("jeff", "jeremy", "peter")
+
+sample(students, size = 5, replace=TRUE)
+```
+
+## 2. Generate DNA Sequences
+Now work with `bases` rather than `students`
+
+```{r}
+bases <- c("A", "C", "G", "T")
+sample(bases, size=25, replace=TRUE)
+```
+
+
+
+Now I have a working 'snippet' of code that I ran to the body of the first function version here:
+
+```{r}
+generate_dna <- function(size=5){
+  bases <- c("A", "C", "G", "T")
+  sample(bases, size=size, replace=TRUE)
+}
+```
+
+```{r}
+generate_dna(100)
+```
+
+```{r}
+generate_dna()
+```
+
+I want the ability to return a sequence like "AGTACCTG" I.E. A ONE ELEMENT VECTOR where the bases are all together
+
+```{r}
+generate_dna <- function(size=5, together=TRUE){
+  bases <- c("A", "C", "G", "T")
+  sequence <- sample(bases, size=size, replace=TRUE)
+  if(together){
+ sequence <- paste(sequence, collapse = "") 
+  }
+  return(sequence)
+}
+```
+
+```{r}
+generate_dna(together = FALSE)
+```
+
+## 3. Generate Protein Function
+
+We can get the set of 20 natural amino acids from the **bio3d** package.
+
+```{r}
+bio3d::aa.table$aa1[1:20]
+```
+>Q. Write a protein sequence generating function that will return sequences of a user specified length?
+
+```{r}
+generate_protein <- function(size=10, together=TRUE){
+  aa <- c("A", "R", "N", "D", "C", "Q", "E", "G", "H", "I", "L", "K", "M", "F", "P", "S", "T", "W", "Y", "V")
+  sequence <- sample(aa, size=size, replace=TRUE)
+  if(together){
+ sequence <- paste(sequence, collapse = "") 
+  }
+  return(sequence)
+}
+```
+
+```{r}
+generate_protein()
+```
+
+>Q. Generate random protein sequences of length 6 to 12 amino acids.
+
+```{r}
+generate_protein(8)
+```
+
+We can fix this inability to generate multiple sequences by either editing and adding to the function body code (i.e. a for loop) or by using the R **apply** family of utility functions.
+
+```{r}
+sapply(6:12, generate_protein)
+```
+
+It would cool and useful if I could get FASTA format output
+
+```{r}
+ans <- sapply(6:12, generate_protein)
+ans
+```
+
+```{r}
+cat(ans, sep="\n")
+```
+
+I want this to look like
+
+```
+>ID.6
+YQKPFD
+ID.7
+QGWWMCA
+LLNSWHLN
+ID.8
+QLYTWVLVI
+etc
+
+```
+
+The functions `paste()` and `cat()` may be helpful
+
+
+```{r}
+id.line <- paste(">ID.", 6:12, sep="")
+id.line
+```
+```{r}
+id.line <- paste(">ID.", 6:12, sep="")
+seq.line <- paste(id.line, ans, sep="\n")
+cat(seq.line, sep="\n")
+```
+
+
+>Q. Determine if these sequences can be found in nature or are the unique? Why or why not?
+
+I BLASTp searched my FASTA format sequences against NR and found that length 6, 7, and 8 are not unique due to them having a quary cover and percent identity of 100%. However, for lengths 9, 10, 11, and 12, they are unique, as they do not have a protein that has both query cover of 100% and percent identity of 100%. 
