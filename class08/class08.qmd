@@ -1,0 +1,299 @@
+---
+title: "Class 8: Breast Cancer Mini Project"
+author: "Abraham Rachlin"
+format: pdf
+---
+
+## Background
+
+## Data import
+
+Our data come from the U. of Wisconsin Medical Center
+
+```{r}
+wisc.df <- read.csv("WisconsinCancer.csv", row.names = 1)
+```
+
+>Q1. How many patients/samples are in this dataset?
+
+```{r}
+nrow(wisc.df)
+```
+How many of the observations have a malignant diagnosis?
+
+```{r}
+wisc.df$diagnosis
+```
+
+
+```{r}
+table(wisc.df$diagnosis)
+```
+
+>Q2. How many variables/features in the data are suffixed with _mean?
+
+```{r}
+colnames(wisc.df)
+```
+
+```{r}
+length(grep("mean", colnames(wisc.df)))
+```
+
+There is a diagnosis column that is the clinician consensus that I want to exclude from any further analysis. We will come back later and compare our results to this diagnosis.
+
+```{r}
+diagnosis <- as.factor(wisc.df$diagnosis)
+head(diagnosis)
+```
+Now we can remove it from the `wisc.df`
+
+
+```{r}
+wisc.data <- wisc.df[,-1]
+```
+
+## Clustering
+
+```{r}
+kmeans(wisc.data, centers=2)
+```
+Let's try a `hclust`
+```{r}
+hc <- hclust(dist(wisc.data))
+plot(hc)
+```
+We can extract clusters from this rather poor dendrogram/tree with the `cutree()`
+
+```{r}
+grps <- cutree(hc, k=2)
+```
+
+How many individuals in each cluster
+
+```{r}
+table(grps)
+```
+
+```{r}
+table(diagnosis)
+```
+
+We can generate a cross-table that compares our cluster `grps` vector without `diagnosis` vector values
+
+```{r}
+table(diagnosis, grps)
+```
+
+## Principal Component Analysis
+
+### The importance of data scaling
+The main functiom for PCA in base R is `prcomp()` it has a default input parameter of `scale=F`
+
+```{r}
+#prcomp()
+head(mtcars)
+```
+
+We could do a PCA of this data as is and it coukd be misleading...
+
+```{r}
+pc <- prcomp(mtcars)
+biplot(pc)
+```
+
+Let's look at the ean values of each column and their standard deviation.
+
+```{r}
+colMeans(mtcars)
+```
+
+```{r}
+apply(mtcars, 2, sd)
+```
+We can "scale" this data before PCA to get a much better representation and analysis of all the columns.
+```{r}
+mtscale <- scale(mtcars)
+```
+```{r}
+round(colMeans(mtscale))
+```
+
+```{r}
+apply(mtscale, 2, sd)
+```
+```{r}
+pr.scale <- prcomp(mtscale)
+```
+We can look at the two main results figures from PCA- the "PC plot" (a.k.a. score plot, ordienation plot, or PC1 vs PC2 plot). The "loadings plot" how the original variables contribute to the new PCs. 
+
+A loadings plot of the unscaled PCA results
+```{r}
+library(ggplot2)
+ggplot(pc$rotation) +
+  aes(PC1, rownames(pc$rotation)) + 
+  geom_col()
+```
+
+```{r}
+
+ggplot(pr.scale$rotation) +
+  aes(PC1, rownames(pc$rotation)) + 
+  geom_col()
+```
+
+PC plot of scaled PCA results
+
+```{r}
+ggplot(pr.scale$x) +
+  aes(PC1, PC2, label=rownames(pr.scale$x)) +
+  geom_point() +
+  geom_text()
+```
+> **Key point**: In general, we will set `scale=TRUE` when we do PCA. This is not the default but probably should be...
+
+We can check the SD and mean of the different columns in `wisc.data` to see if we need to scale - hint, we do!
+
+### PCA of wisc data
+
+```{r}
+wisc.pr <- prcomp(wisc.data, scale=TRUE)
+```
+
+To see how well PCA is doing here in terms capturing the variance (or spread) in the data, we can use the `summary() function.
+
+```{r}
+summary(wisc.pr)
+```
+Let's make the main PC1 vs PC2
+
+```{r}
+ggplot(wisc.pr$x) +
+  aes(PC1, PC2, col=diagnosis) +
+  geom_point() +
+  xlab("PC1 (44.3%)") +
+  ylab("PC2 (19%)")
+```
+
+>Q4. From your results, what proportion of the original variance is captured by the first principal components (PC1)?
+
+0.4427 or 44.27%. 
+
+>Q5. How many principal components (PCs) are required to describe at least 70% of the original variance in the data?
+
+3 PCs are required to get to 70%. 
+
+>Q6. How many principal components (PCs) are required to describe at least 90% of the original variance in the data?
+
+You need about 7 principal components to reach 90% of the original variance.
+
+>Q7. What stands out to you about this plot? Is it easy or difficult to understand? Why?
+
+```{r}
+biplot(wisc.pr)
+```
+What stands out to me about this plot is the fact that it is a massive mess. This plot seems very difficult to understand, as everything is very unorganized.
+
+>Q8. Generate a similar plot for principal components 1 and 3. What do you notice about these plots?
+
+```{r}
+plot(wisc.pr$x[, 1:3], col = diagnosis, 
+     xlab = "PC1", ylab = "PC3")
+```
+What I can notice about this graph is that it is much cleaner than the previous. This plot shows two clumps of data, separating the two groups by diagnosis.
+
+>Q9. For the first principal component, what is the component of the loading vector (i.e. wisc.pr$rotation[,1]) for the feature concave.points_mean?
+
+```{r}
+wisc.pr$rotation["concave.points_mean", 1]
+```
+
+
+>Q10. What is the minimum number of principal components required to explain 80% of the variance of the data?
+
+The minimum number of principal components to explain 80% of variance is five principal components.
+
+## 5. Combining methods
+
+We can take our PCA results and use them as a basis set for other analysis such as clustering.
+
+## Clustering on PCA Results
+
+```{r}
+wisc.pr.hclust <- hclust( dist(wisc.pr$x[,1:2]), method="ward.D2" )
+plot(wisc.pr.hclust)
+```
+We can "cut" this tree to yield our cluster (groups): 
+```{r}
+pc.grps <- cutree(wisc.pr.hclust, k=2)
+table(pc.grps)
+```
+```{r}
+table(pc.grps, diagnosis)
+```
+
+
+How do my cluster grps compare to the expert diagnosis 
+
+```{r}
+table(diagnosis, pc.grps)
+```
+
+```{r}
+table(diagnosis)
+```
+
+> q15. How well does the newly created model with four clusters separate out the two diagnoses?
+
+The newly created model with four clusters separates the diagnosis well. It helps visualize how the benign groups and metastacized groups differ across the different groups.
+
+```{r}
+grps <- cutree(wisc.pr.hclust, k=2)
+table(grps)
+```
+
+```{r}
+table(grps, diagnosis)
+```
+```{r}
+plot(wisc.pr$x[,1:2], col=grps)
+```
+
+```{r}
+plot(wisc.pr$x[,1:2], col=diagnosis)
+```
+
+```{r}
+wisc.pr.hclust.clusters <- cutree(wisc.pr.hclust, k=2)
+```
+
+```{r}
+table(wisc.pr.hclust.clusters, diagnosis)
+```
+
+
+
+>Q16. How well do the hierarchical clustering models you created in previous sections (i.e. before PCA) do in terms of separating the diagnoses? Again, use the table() function to compare the output of each model (wisc.km$cluster and wisc.hclust.clusters) with the vector containing the actual diagnoses.
+
+I think they do a good job at separating the models well, as you could see the two groups separated well. However, it could be better, as it could be in much more detail.
+
+They did really poorly, we do much better after PCA- the new PCA variables give us much better separation of M and B.
+
+## 7. Prediction
+
+We can use our model PCA model for the analysis of new "unseen" data. In this case fro, U. Mich. 
+
+```{r}
+#url <- "new_samples.csv"
+url <- "https://tinyurl.com/new-samples-CSV"
+new <- read.csv(url)
+npc <- predict(wisc.pr, newdata=new)
+npc
+```
+
+```{r}
+plot(wisc.pr$x[,1:2], col=diagnosis)
+points(npc[,1], npc[,2], col="blue", pch=16, cex=3)
+text(npc[,1], npc[,2], c(1,2), col="white")
+```
+For follow-up, patients in group 2 should be asked for a follow-up.
