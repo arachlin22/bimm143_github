@@ -7,4 +7,4 @@ my classwork from BIMM143 S25 at UC San Diego.
 
 - 06 R functions
 
-- 07 
+- 07 class07
