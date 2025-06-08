@@ -1,0 +1,206 @@
+---
+title: "class13"
+author: "Abraham Rachlin"
+format: pdf
+toc: true
+---
+
+# Background
+Today, we will analyze some RNA Sequencing data on the effects of a common steroid drug on airway cell lines.
+
+There are two main inputs we need for this analysis:
+
+- `countData`: counts for genes in rows with experiments in the columns
+- `colData`: or metadata that tells us abut the design of the experiment (i.e. what is in the coolumns of `countData`)
+
+```{r}
+counts <- read.csv("airway_scaledcounts.csv", row.names=1)
+metadata <-  read.csv("airway_metadata.csv")
+```
+
+```{r}
+head(counts)
+```
+```{r}
+head(metadata)
+```
+
+>Q1. How many genes are in this dataset?
+
+
+```{r}
+nrow(counts)
+```
+
+>Q2. How many 'control' cell lines do we have?
+
+```{r}
+table(metadata$dex)
+sum(metadata$dex == "control")
+```
+4 'control' cell lines.
+
+# Toy differential gene expression
+
+Let's try finding the mean of the "control" and "treated" columns and see if they differ.
+
+The `$dex` column tells me whether we have "control" or "treated"
+
+```{r}
+control.inds <- metadata$dex == "control"
+```
+
+```{r}
+control.counts <- counts[,control.inds]
+```
+
+```{r}
+head(control.counts)
+```
+
+```{r}
+control.mean <- rowMeans(control.counts)
+head(control.mean)
+```
+
+>Q3. Do the same for "treated" to get a `treated.mean`
+
+```{r}
+treated <- metadata[metadata[,"dex"]=="treated",]
+treated.counts <- counts[ ,treated$id]
+treated.mean <- rowMeans(treated.counts)
+head(treated.mean)
+```
+
+```{r}
+meancounts <- data.frame(control.mean, treated.mean)
+colSums(meancounts)
+```
+
+>Q4. Make a plot of `control.mean` vs `treated.mean`
+
+```{r}
+plot(meancounts)
+```
+
+```{r}
+library(ggplot2)
+ggplot(meancounts, aes(control.mean, treated.mean)) +
+  geom_point(alpha=0.3)
+```
+
+We totally need to log transform this data as it is so heavily skewed.
+```{r}
+plot(log(meancounts))
+```
+
+```{r}
+ggplot(meancounts, aes(control.mean, treated.mean)) +
+  geom_point() +
+  scale_x_continuous(trans="log2")
+```
+
+A common "rule-of-thumb" is to focus on genes with a log2 "fold-change" of +2 as so-called UP REGULATED and -2 as DOWN REGULATED
+
+Let's add a log2 fold-change value to our `meancounts` data.
+
+```{r}
+meancounts$log2fc <- log2(meancounts$treated.mean/meancounts$control.mean)
+head(meancounts)
+```
+
+>Q. Remove and "zero count" genes from our dataset for further analysis.
+
+```{r}
+to.keep <- rowSums(meancounts[,1:2] == 0) == 0
+sum(to.keep)
+```
+```{r}
+mycounts <- meancounts[to.keep,]
+head(mycounts)
+```
+
+
+>Q8. How many genes are "up" regulated at a log2fc threshold of +2?
+
+```{r}
+sum(mycounts$log2fc >= 2)
+```
+
+
+>Q9. How many genes are "down" regulated at a log2fc threshold of -2?
+
+```{r}
+sum(mycounts$log2fc <= -2)
+```
+We're missing stats.
+
+# DESeq2 Analysis
+
+Let's do this properly and consider the stats - are the differences in the means significant?
+
+We will use DESeq2 to do this.
+
+```{r, message=FALSE}
+library(DESeq2)
+citation("DESeq2")
+```
+
+The first function we will use from this package sets up the input in the particular format that DESeq wants: 
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                       colData = metadata,
+                       design = ~dex)
+```
+
+We can now run our DESeq analysis
+
+```{r}
+dds <- DESeq(dds)
+res <- results(dds)
+```
+
+  Peak at results
+```{r}
+head(res)
+```
+We can flip the y-axis by adding a minus sign. This will make it easier to interpret.
+  
+```{r}
+plot(res$log2FoldChange, -log(res$padj))
+abline(v=-2, col="red")
+abline(v=+2, col="red")
+```
+
+Let's add some color.
+
+```{r}
+mycols <- rep("gray", nrow(res))
+mycols[ res$log2FoldChange <= -2 ] <- "blue"
+mycols[ res$log2FoldChange <= 2 ] <- "blue"
+
+mycols[ res$padj >= 0.05] <- "gray"
+plot(res$log2FoldChange, -log(res$padj), col=mycols)
+```
+
+```{r}
+head(res)
+```
+
+>Q. Make a ggplot volcano plot with colors and lines as annotation along with nice axis labels.
+
+```{r}
+ggplot(res, aes(log2FoldChange, -log(padj))) +
+  geom_point(alpha=0.4, color=mycols) +
+  geom_vline(xintercept=c(-2, 2)) +
+  geom_hline(yintercept= -log(0.05))
+  labs(
+    title = "Volcano ggplot",
+    x = "log 2 fold-change",
+    y = "-log(Adjusted P-Value)"
+  ) +
+  theme_bw()
+  
+```
+
